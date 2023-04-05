@@ -1,0 +1,24 @@
+# visualizations 
+bundesliga_data %>% 
+  ggplot() +
+  # geom_density(aes(xG_Home), fill = alpha('dodgerblue', 0.5)) + 
+  # geom_density(aes(xG_Away), fill = alpha('orange', 0.5)) +
+  geom_bar(aes(home_score), fill = alpha(alpha('dodgerblue'), 0.75)) +
+  geom_bar(aes(away_score), fill = alpha('orange', 0.5)) 
+
+
+# visualize the poisson distribution
+# outcomes
+outcomes <- min(bundesliga_data$home_score, na.rm = T):max(bundesliga_data$home_score, na.rm = T)
+
+# compute the probability mass function for each outcome
+pmf <- dpois(outcomes, mean(bundesliga_data$home_score, na.rm = T))
+
+poisson_data <- tibble(home_score = outcomes, probability = pmf)
+
+bundesliga_data_poisson <- bundesliga_data %>%
+  left_join(poisson_data, by="home_score")
+
+poisson_data %>% 
+  ggplot(aes(home_score, probability)) +
+  geom_bar(stat = "identity")

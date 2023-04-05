@@ -1,0 +1,131 @@
+# Load the required packages ====
+library(rvest)
+library(tidyverse)
+
+# define the seasons from 2017 to 2022 ====
+seasons <- c()
+
+start_year <- 2017
+end_year <- lubridate::year(Sys.Date()) - 1
+
+for (year in start_year:end_year){
+  seasons <- c(seasons, str_c(year, '-', year + 1))
+}
+
+# create the URLs ====
+urls <- c()
+
+for (season in seasons){
+  # create the url string(s)
+  urls <- c(urls,
+            str_c("https://fbref.com/en/comps/20/"
+                  , season 
+                  ,"/schedule/"
+                  , season 
+                  ,"-Bundesliga-Scores-and-Fixtures"))
+}
+
+# build the function to scrape the data ====
+scrape_bundesliga_data <- function(url){
+  # Read the webpage
+  webpage <- read_html(url)
+  
+  # Extract match data
+  matches <- webpage %>%
+    html_nodes(xpath = "//table[contains(@class, 'stats_table')]//tbody//tr[not(contains(@class, 'thead'))]")
+  
+  # Extract individual columns
+  day <- matches %>%
+    html_nodes("td:nth-child(2)") %>%
+    html_text(trim = TRUE)
+  
+  date <- matches %>%
+    html_nodes("td:nth-child(3)") %>%
+    html_text(trim = TRUE)
+  
+  time <- matches %>%
+    html_nodes("td:nth-child(4)") %>%
+    html_text(trim = TRUE)
+  
+  home_team <- matches %>%
+    html_nodes("td:nth-child(5)") %>%
+    html_text(trim = TRUE)
+  
+  xG_Home <- matches %>%
+    html_nodes("td:nth-child(6)") %>%
+    html_text(trim = TRUE) %>% 
+    as.numeric()
+  
+  score <- matches %>%
+    html_nodes("td:nth-child(7)") %>%
+    html_text(trim = TRUE) 
+  
+  xG_Away <- matches %>%
+    html_nodes("td:nth-child(8)") %>%
+    html_text(trim = TRUE) %>% 
+    as.numeric()
+  
+  away_team <- matches %>%
+    html_nodes("td:nth-child(9)") %>%
+    html_text(trim = TRUE)
+  
+  attendance <- matches %>%
+    html_nodes("td:nth-child(10)") %>%
+    html_text(trim = TRUE) %>%
+    str_replace_all(',', '') %>%
+    as.numeric()
+  
+  Venue <- matches %>%
+    html_nodes("td:nth-child(11)") %>%
+    html_text(trim = TRUE)
+  
+  Referee <- matches %>%
+    html_nodes("td:nth-child(12)") %>%
+    html_text(trim = TRUE)
+  
+  # define function to turn time of the match into a fractional number of hours
+  time_to_frac_num <- function(time_str){
+    # split string by the colon
+    time_parts <- str_split(time_str, ":")[[1]]
+    
+    # convert the hours and minutes to numeric values
+    hours <- as.numeric(time_parts[1])
+    minutes <- as.numeric(time_parts[2])
+    
+    # calculate fractional hours
+    time_numeric <- hours + (minutes/60)
+    
+    # return the value
+    return(time_numeric)
+  }
+  
+  # build the data frame
+  match_data <- tibble(
+    date = date
+    , time = time
+    , home_team = home_team
+    , xG_Home = xG_Home
+    , score = score
+    , away_team = away_team
+    , xG_Away = xG_Away
+    , attendance = attendance
+    , venue = Venue
+    , referee = Referee
+  ) %>%
+    mutate(date = lubridate::as_date(date)
+           , time = map_dbl(time, time_to_frac_num)
+           , home_score = as.numeric(str_extract(score, "^\\d+"))
+           , away_score = as.numeric(str_extract(score, "\\d+$"))) %>%
+    drop_na(date)
+  
+  return(match_data)
+}
+
+# run the function ====
+dataframes <- map(urls, scrape_bundesliga_data)
+
+# create a single dataframe
+bundesliga_data <- do.call(rbind, dataframes)
+
+
+
